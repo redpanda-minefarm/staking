@@ -1,0 +1,20 @@
+[package]
+name = "staking"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "staking"
+
+[features]
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+build_log = []
+
+[dependencies]
+anchor-spl = { version = "0.31.1", features = ["token_2022"] }
+anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
+spl-token-2022 = { version = "9.0.0", features = ["no-entrypoint"] }
+solana-security-txt = "1.1.1"
+
