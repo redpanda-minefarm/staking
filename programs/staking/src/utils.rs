@@ -14,8 +14,6 @@ const PRECISION: u128 = 10_000;
 pub fn get_months_elapsed(start_time: i64, current_time: i64) -> Result<u64> {
     let seconds_elapsed = current_time
         .checked_sub(start_time)
-        .ok_or(StakingError::Underflow)?
-        .checked_sub(SECONDS_PER_DAY) // for start from 21 (monday)
         .ok_or(StakingError::Underflow)?;
     Ok((seconds_elapsed / (30 * 24 * 60 * 60)) as u64)
 }
@@ -23,6 +21,8 @@ pub fn get_months_elapsed(start_time: i64, current_time: i64) -> Result<u64> {
 pub fn get_week_number(current_time: i64, program_start: i64) -> Result<u64> {
     let seconds_elapsed = current_time
         .checked_sub(program_start)
+        .ok_or(StakingError::Underflow)?
+        .checked_sub(SECONDS_PER_DAY) // for start from 21 (monday)
         .ok_or(StakingError::Underflow)?;
     Ok((seconds_elapsed / SECONDS_PER_WEEK) as u64)
 }
