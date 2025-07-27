@@ -14,6 +14,8 @@ const PRECISION: u128 = 10_000;
 pub fn get_months_elapsed(start_time: i64, current_time: i64) -> Result<u64> {
     let seconds_elapsed = current_time
         .checked_sub(start_time)
+        .ok_or(StakingError::Underflow)?
+        .checked_sub(SECONDS_PER_DAY) // for start from 21 (monday)
         .ok_or(StakingError::Underflow)?;
     Ok((seconds_elapsed / (30 * 24 * 60 * 60)) as u64)
 }
@@ -237,9 +239,13 @@ pub fn calculate_total_rewards_for_claim_all<'info>(
         // 4. Verify owner
         require!(stake_entry.owner == *user, StakingError::Unauthorized);
 
-        // msg!("Stake entry is valid for user: {}", user);
         // 5. Calculate rewards for this stake
-        let rewards = calculate_claimable_rewards(&stake_entry, staking_pool, current_time, true)?;
+        let rewards = calculate_claimable_rewards(
+            &stake_entry, 
+            staking_pool, 
+            current_time, 
+            false,
+        )?;
 
         if rewards > 0 {
             // 6. Accumulate total amount
