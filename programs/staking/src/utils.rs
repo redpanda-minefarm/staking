@@ -40,6 +40,47 @@ pub fn get_day_index(current_time: i64, program_start: i64) -> Result<u64> {
     Ok(day)
 }
 
+pub fn get_stake_end_time(stake_entry: &StakeEntry) -> i64 {
+    stake_entry.start_time + (stake_entry.duration_months as i64 * 30 * SECONDS_PER_DAY)
+}
+
+pub fn should_skip_day(
+    day: u64,
+    stake_entry: &StakeEntry,
+    program_start: i64,
+    is_unstaking: bool,
+    current_time: i64
+) -> Result<bool> {
+    // Convert day index to timestamp
+    let day_timestamp = program_start + (day as i64 * SECONDS_PER_DAY);
+    
+    // Skip days before stake start
+    if day_timestamp < stake_entry.start_time {
+        return Ok(true);
+    }
+    
+    // Skip days after stake end time
+    let stake_end_time = get_stake_end_time(stake_entry);
+    if day_timestamp >= stake_end_time {
+        return Ok(true);
+    }
+    
+    // If unstaking early, use current time as the cutoff
+    // Otherwise use stake end time
+    let cutoff_time = if is_unstaking && current_time < stake_end_time {
+        current_time
+    } else {
+        stake_end_time
+    };
+    
+    // Skip days that start after the cutoff
+    if day_timestamp >= cutoff_time {
+        return Ok(true);
+    }
+    
+    Ok(false)
+}
+
 // Helper functions
 pub fn calculate_base_apy(total_staked: u64, available_rewards: u64) -> Result<u64> {
     // Base APY = (R / (T + 1)) * 100 - according to specification
@@ -167,9 +208,8 @@ pub fn calculate_claimable_rewards(
 ) -> Result<u64> {
     let current_week = get_week_number(current_time, staking_pool.program_start_time)?;
     let last_claimed_week = stake_entry.last_claim_week;
-    // msg!("current_week last_claimed_week {} {}", current_week, last_claimed_week);
-
-    // Can only claim up to previous week (not current week)
+    
+    // Can only claim up to previous week (not current week) when unstaking
     let claimable_up_to_week = if is_unstaking {
         current_week.saturating_sub(1)
     } else {
@@ -183,25 +223,39 @@ pub fn calculate_claimable_rewards(
     // Calculate day range
     let start_day = (last_claimed_week * 7) as usize;
     let end_day = (claimable_up_to_week * 7) as usize;
-    // msg!("start_day end_day {} {}", start_day, end_day);
 
     let mut total_rewards = 0u64;
-    let mut last_daly_rate = 0u64;
+    let mut last_daily_rate = 0u64;
+    
     // Sum rewards for each day
     for day in start_day..end_day.min(MAX_DAILY_RATES) {
-        // msg!("Calculating rewards for day: {}", day);
-        let daily_rate = staking_pool.daily_rates[day];
+        // Check if we should skip this day
+        if should_skip_day(
+            day as u64, 
+            stake_entry, 
+            staking_pool.program_start_time, 
+            is_unstaking, 
+            current_time
+        )? {
+            continue;
+        }
+        
+        let daily_rate = if day < staking_pool.daily_rates.len() {
+            staking_pool.daily_rates[day]
+        } else {
+            last_daily_rate
+        };
+        
         if daily_rate > 0 {
-            last_daly_rate = daily_rate;
+            last_daily_rate = daily_rate;
         }
 
         let daily_reward = calculate_daily_reward(
             stake_entry.amount,
-            last_daly_rate,
+            last_daily_rate,
             stake_entry.duration_months,
             staking_pool.normalization_k,
         )?;
-        // msg!("daily_reward {}", daily_reward);
 
         total_rewards = total_rewards
             .checked_add(daily_reward)
