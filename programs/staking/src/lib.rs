@@ -369,9 +369,8 @@ pub mod staking_program {
             current_time,
         )?;
 
-        // msg!("Total rewards to claim: {}", total_rewards);
-
-        require!(total_rewards > 0, StakingError::NoRewardsAvailable);
+        msg!("Total rewards to claim: {}", total_rewards);
+        // require!(total_rewards > 0, StakingError::NoRewardsAvailable);
 
         // Update stake entries that have rewards
         let current_week = utils::get_week_number(current_time, staking_pool.program_start_time)?;
