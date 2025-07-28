@@ -103,6 +103,7 @@ pub fn calculate_daily_reward(
     duration_months: u8,
     normalization_k: u128,
 ) -> Result<u64> {
+    msg!("Calculating daily reward for stake_amount: {}, daily_rate: {}, duration_months: {}, normalization_k: {}", stake_amount, daily_rate, duration_months, normalization_k);    
     // Apply weight multiplier based on stake duration
     // NORMALIZATION_K in original was 500 but we use 5000 for better precision
     // and can use 10 as a multiplier for 1.0x, 1.5x, etc.
@@ -113,6 +114,7 @@ pub fn calculate_daily_reward(
         12 => 30, // 3.0x
         _ => return Err(StakingError::InvalidDuration.into()),
     };
+    msg!("weight_multiplier: {}", weight_multiplier);
 
     let weight_factor = (weight_multiplier as u128)
         .checked_mul(PRECISION as u128)
@@ -120,11 +122,15 @@ pub fn calculate_daily_reward(
         .checked_div(normalization_k)
         .ok_or(StakingError::DivisionByZero)?;
 
+    msg!("weight_factor: {}", weight_factor);
+
     let mut daily_rate_with_weight = (daily_rate as u128)
         .checked_mul(weight_factor as u128)
         .ok_or(StakingError::Overflow)?
         .checked_mul(PRECISION as u128)
         .ok_or(StakingError::Overflow)?;
+
+    msg!("daily_rate_with_weight: {}", daily_rate_with_weight);
 
     let max_daily_rate = 100 * PRECISION * PRECISION * PRECISION; // 100% APY with precision
     if daily_rate_with_weight > max_daily_rate {
@@ -142,6 +148,8 @@ pub fn calculate_daily_reward(
         .ok_or(StakingError::DivisionByZero)?
         .checked_div(PRECISION)
         .ok_or(StakingError::DivisionByZero)?;
+
+    msg!("Calculated daily reward: {}", daily_reward);
 
     Ok(daily_reward as u64)
 }
