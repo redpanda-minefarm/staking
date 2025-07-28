@@ -157,9 +157,9 @@ pub fn calculate_claimable_rewards(
 
     // Can only claim up to previous week (not current week)
     let claimable_up_to_week = if is_unstaking {
-        current_week
-    } else {
         current_week.saturating_sub(1)
+    } else {
+        current_week
     };
 
     if claimable_up_to_week <= last_claimed_week {
