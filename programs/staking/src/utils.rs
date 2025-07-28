@@ -103,7 +103,7 @@ pub fn calculate_daily_reward(
     duration_months: u8,
     normalization_k: u128,
 ) -> Result<u64> {
-    msg!("Calculating daily reward for stake_amount: {}, daily_rate: {}, duration_months: {}, normalization_k: {}", stake_amount, daily_rate, duration_months, normalization_k);    
+    // msg!("Calculating daily reward for stake_amount: {}, daily_rate: {}, duration_months: {}, normalization_k: {}", stake_amount, daily_rate, duration_months, normalization_k);    
     // Apply weight multiplier based on stake duration
     // NORMALIZATION_K in original was 500 but we use 5000 for better precision
     // and can use 10 as a multiplier for 1.0x, 1.5x, etc.
@@ -114,7 +114,7 @@ pub fn calculate_daily_reward(
         12 => 30, // 3.0x
         _ => return Err(StakingError::InvalidDuration.into()),
     };
-    msg!("weight_multiplier: {}", weight_multiplier);
+    // msg!("weight_multiplier: {}", weight_multiplier);
 
     let weight_factor = (weight_multiplier as u128)
         .checked_mul(PRECISION as u128)
@@ -122,7 +122,7 @@ pub fn calculate_daily_reward(
         .checked_div(normalization_k)
         .ok_or(StakingError::DivisionByZero)?;
 
-    msg!("weight_factor: {}", weight_factor);
+    // msg!("weight_factor: {}", weight_factor);
 
     let mut daily_rate_with_weight = (daily_rate as u128)
         .checked_mul(weight_factor as u128)
@@ -130,9 +130,9 @@ pub fn calculate_daily_reward(
         .checked_mul(PRECISION as u128)
         .ok_or(StakingError::Overflow)?;
 
-    msg!("daily_rate_with_weight: {}", daily_rate_with_weight);
+    // msg!("daily_rate_with_weight: {}", daily_rate_with_weight);
 
-    let max_daily_rate = 100 * PRECISION * PRECISION * PRECISION; // 100% APY with precision
+    let max_daily_rate = 10 * PRECISION * PRECISION * PRECISION; // 100% APY with precision
     if daily_rate_with_weight > max_daily_rate {
         daily_rate_with_weight = max_daily_rate
     }
@@ -149,7 +149,7 @@ pub fn calculate_daily_reward(
         .checked_div(PRECISION)
         .ok_or(StakingError::DivisionByZero)?;
 
-    msg!("Calculated daily reward: {}", daily_reward);
+    // msg!("Calculated daily reward: {}", daily_reward);
 
     Ok(daily_reward as u64)
 }
@@ -162,7 +162,7 @@ pub fn calculate_claimable_rewards(
 ) -> Result<u64> {
     let current_week = get_week_number(current_time, staking_pool.program_start_time)?;
     let last_claimed_week = stake_entry.last_claim_week;
-    msg!("current_week last_claimed_week {} {}", current_week, last_claimed_week);
+    // msg!("current_week last_claimed_week {} {}", current_week, last_claimed_week);
 
     // Can only claim up to previous week (not current week)
     let claimable_up_to_week = if is_unstaking {
@@ -178,13 +178,13 @@ pub fn calculate_claimable_rewards(
     // Calculate day range
     let start_day = (last_claimed_week * 7) as usize;
     let end_day = (claimable_up_to_week * 7) as usize;
-    msg!("start_day end_day {} {}", start_day, end_day);
+    // msg!("start_day end_day {} {}", start_day, end_day);
 
     let mut total_rewards = 0u64;
     let mut last_daly_rate = 0u64;
     // Sum rewards for each day
     for day in start_day..end_day.min(MAX_DAILY_RATES) {
-        msg!("Calculating rewards for day: {}", day);
+        // msg!("Calculating rewards for day: {}", day);
         let daily_rate = staking_pool.daily_rates[day];
         if daily_rate > 0 {
             last_daly_rate = daily_rate;
@@ -196,7 +196,7 @@ pub fn calculate_claimable_rewards(
             stake_entry.duration_months,
             staking_pool.normalization_k,
         )?;
-        msg!("daily_reward {}", daily_reward);
+        // msg!("daily_reward {}", daily_reward);
 
         total_rewards = total_rewards
             .checked_add(daily_reward)
@@ -216,7 +216,7 @@ pub fn calculate_total_rewards_for_claim_all<'info>(
 ) -> Result<(u64, Vec<usize>)> {
     let mut total_rewards = 0u64;
     let mut valid_stake_indices = Vec::new();
-    msg!("Remaining accounts count: {}", remaining_accounts.len());
+    // msg!("Remaining accounts count: {}", remaining_accounts.len());
 
     // Iterate through all passed StakeEntry accounts
     for (index, stake_entry_account_info) in remaining_accounts.iter().enumerate() {
@@ -258,7 +258,7 @@ pub fn calculate_total_rewards_for_claim_all<'info>(
             current_time, 
             false,
         )?;
-        msg!("Calculated rewards for stake {}: {}", index, rewards);
+        // msg!("Calculated rewards for stake {}: {}", index, rewards);
 
         if rewards > 0 {
             // 6. Accumulate total amount
