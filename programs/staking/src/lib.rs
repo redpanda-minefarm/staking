@@ -392,7 +392,7 @@ pub mod staking_program {
 
             // Update stake data
             stake_entry.last_claim_time = current_time;
-            stake_entry.last_claim_week = current_week.saturating_sub(1);
+            stake_entry.last_claim_week = current_week;
             stake_entry.total_claimed = stake_entry
                 .total_claimed
                 .checked_add(rewards)
