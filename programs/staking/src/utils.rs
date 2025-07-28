@@ -154,6 +154,7 @@ pub fn calculate_claimable_rewards(
 ) -> Result<u64> {
     let current_week = get_week_number(current_time, staking_pool.program_start_time)?;
     let last_claimed_week = stake_entry.last_claim_week;
+    msg!("current_week last_claimed_week {} {}", current_time, last_claimed_week);
 
     // Can only claim up to previous week (not current week)
     let claimable_up_to_week = if is_unstaking {
@@ -169,12 +170,13 @@ pub fn calculate_claimable_rewards(
     // Calculate day range
     let start_day = (last_claimed_week * 7) as usize;
     let end_day = (claimable_up_to_week * 7) as usize;
+    msg!("start_day end_day {} {}", start_day, end_day);
 
     let mut total_rewards = 0u64;
     let mut last_daly_rate = 0u64;
     // Sum rewards for each day
     for day in start_day..end_day.min(MAX_DAILY_RATES) {
-        // msg!("Calculating rewards for day: {}", day);
+        msg!("Calculating rewards for day: {}", day);
         let daily_rate = staking_pool.daily_rates[day];
         if daily_rate > 0 {
             last_daly_rate = daily_rate;
@@ -186,6 +188,7 @@ pub fn calculate_claimable_rewards(
             stake_entry.duration_months,
             staking_pool.normalization_k,
         )?;
+        msg!("daily_reward {}", daily_reward);
 
         total_rewards = total_rewards
             .checked_add(daily_reward)
@@ -205,6 +208,7 @@ pub fn calculate_total_rewards_for_claim_all<'info>(
 ) -> Result<(u64, Vec<usize>)> {
     let mut total_rewards = 0u64;
     let mut valid_stake_indices = Vec::new();
+    msg!("Remaining accounts count: {}", remaining_accounts.len());
 
     // Iterate through all passed StakeEntry accounts
     for (index, stake_entry_account_info) in remaining_accounts.iter().enumerate() {
@@ -246,6 +250,7 @@ pub fn calculate_total_rewards_for_claim_all<'info>(
             current_time, 
             false,
         )?;
+        msg!("Calculated rewards for stake {}: {}", index, rewards);
 
         if rewards > 0 {
             // 6. Accumulate total amount
