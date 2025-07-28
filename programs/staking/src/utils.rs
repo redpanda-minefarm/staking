@@ -154,7 +154,7 @@ pub fn calculate_claimable_rewards(
 ) -> Result<u64> {
     let current_week = get_week_number(current_time, staking_pool.program_start_time)?;
     let last_claimed_week = stake_entry.last_claim_week;
-    msg!("current_week last_claimed_week {} {}", current_time, last_claimed_week);
+    msg!("current_week last_claimed_week {} {}", current_week, last_claimed_week);
 
     // Can only claim up to previous week (not current week)
     let claimable_up_to_week = if is_unstaking {
