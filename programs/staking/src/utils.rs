@@ -22,7 +22,7 @@ pub fn get_week_number(current_time: i64, program_start: i64) -> Result<u64> {
     let seconds_elapsed = current_time
         .checked_sub(program_start)
         .ok_or(StakingError::Underflow)?
-        .checked_sub(SECONDS_PER_DAY) // for start from 21 (monday)
+        .checked_add(SECONDS_PER_DAY) // for start from 21 (monday)
         .ok_or(StakingError::Underflow)?;
     Ok((seconds_elapsed / SECONDS_PER_WEEK) as u64)
 }
