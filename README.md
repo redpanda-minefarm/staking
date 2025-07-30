@@ -13,16 +13,15 @@ The main entity that manages the entire staking system.
 
 **Fields:**
 - `authority` - program administrator's public key
-- `stake_mint` - staking token mint
-- `reward_mint` - reward token mint
+- `stake_mint` - token mint (used for both staking and rewards)
 - `total_staked` - total amount of staked tokens
 - `total_rewards_distributed` - total amount of distributed rewards
 - `last_update_time` - last update timestamp
 - `program_start_time` - program start timestamp
 - `program_end_date` - program end date
-- `treasury_wallet` - treasury wallet address
-- `daily_rates` - array of daily rates (up to 370 days)
-- `last_rate_update_day` - day of last rate update
+- `treasury_address` - treasury wallet address
+- `normalization_k` - normalization coefficient for APY calculation
+- `daily_rates` - array of daily APY rates (up to 370 days)
 
 ### 2. UserStakingAccount
 User's overall staking account that tracks all their stakes.
@@ -49,7 +48,7 @@ Individual user's staking position.
 
 ### 4. Vault Accounts
 - **Stake Vault** - repository for staked tokens
-- **Reward Vault** - repository for reward tokens (pre-funded)
+- **Reward Vault** - repository for reward tokens (pre-funded with same token as stake_mint)
 
 ## Entity Relationships
 
@@ -64,12 +63,12 @@ StakingPool (1) ←→ (N) UserStakingAccount (1) ←→ (N) StakeEntry
 ### Architecture Diagram:
 
 ```
-┌─────────────────┐    ┌─────────────────┐
-│   Stake Mint    │    │   Reward Mint   │
-│   (Token 2022)  │    │   (Token 2022)  │
-└─────────────────┘    └─────────────────┘
-         │                       │
-         ▼                       ▼
+      ┌─────────────────┐
+      │   Token Mint    │
+      │ (Token 2022)    │
+      └─────────────────┘
+         │           │
+         ▼           ▼
 ┌─────────────────┐    ┌─────────────────┐
 │   Stake Vault   │    │  Reward Vault   │
 │      (PDA)      │    │      (PDA)      │
@@ -105,32 +104,45 @@ StakingPool (1) ←→ (N) UserStakingAccount (1) ←→ (N) StakeEntry
 6. `total_staked` in the pool and user account is updated
 
 ### 3. APY Calculation
-APY is calculated dynamically using the formula:
+Daily rates are calculated and stored in the `daily_rates` array. The base APY formula:
 ```
-APY = (R / (T + 1)) * 100 * (W / K)
+Base APY = (R / (T + 1)) * 100
 ```
 where:
 - R = available rewards
 - T = total staked tokens
-- W = weight multiplier (depends on duration)
-- K = normalization factor (500)
+
+Individual rewards are calculated using:
+```
+Daily Reward = (Stake Amount * Daily Rate * Weight Multiplier / K) / 360
+```
+where:
+- Weight Multiplier (depends on duration)
+- K = normalization factor (default: 250)
 
 **Weight Multipliers:**
-- 3 months: 1.0x
-- 6 months: 1.5x
-- 9 months: 2.0x
-- 12 months: 3.0x
+- 3 months: 1.0x (multiplier = 10)
+- 6 months: 1.5x (multiplier = 15)
+- 9 months: 2.0x (multiplier = 20)
+- 12 months: 3.0x (multiplier = 30)
 
 ### 4. Reward Distribution
-- Rewards are calculated weekly
-- Cannot claim rewards for the current week
+- Rewards are calculated daily based on `daily_rates` array
+- Rewards are calculated only for complete days
+- If staked on Wednesday: Monday and Tuesday of that week don't earn rewards
+- If unstaked on Thursday: Friday, Saturday, and Sunday don't earn rewards
+- Cannot claim rewards for the current week (when not unstaking)
 - Rewards are transferred from the pre-funded `Reward Vault`
 - Individual claim: claim rewards from a specific stake by index
 - Batch claim: claim all available rewards from all active stakes in one transaction
 
 ### 5. Unstaking
 - Users can unstake at any time
-- Staked tokens + accumulated rewards are returned
+- Early unstaking penalty applies if unstaking before lock period ends
+- Penalty calculation: `penalty_rate = 20% × (remaining_days / total_days)`
+- Maximum penalty: 20% (first day), decreases linearly to 0% at lock period end
+- Penalties are sent to treasury address
+- Staked tokens (minus penalty) + accumulated rewards are returned
 - Position is deactivated
 
 ## Contract Usage
@@ -155,14 +167,14 @@ Initialize the staking pool:
 
 ```typescript
 await program.methods
-  .initialize(programEndDate, treasuryWallet)
+  .initialize(programEndDate)
   .accounts({
     authority: authority.publicKey,
     stakingPool: stakingPoolPDA,
     stakeMint: stakeMint,
-    rewardMint: rewardMint,
     stakeVault: stakeVaultPDA,
     rewardVault: rewardVaultPDA,
+    treasuryAddress: treasuryAddress,
     systemProgram: SystemProgram.programId,
     tokenProgram: TOKEN_2022_PROGRAM_ID,
     rent: SYSVAR_RENT_PUBKEY,
@@ -207,7 +219,7 @@ await program.methods
     stakeEntry: stakeEntryPDA,
     userRewardAccount: userRewardAccount,
     rewardVault: rewardVaultPDA,
-    rewardMint: rewardMint,
+    stakeMint: stakeMint,
     systemProgram: SystemProgram.programId,
     tokenProgram: TOKEN_2022_PROGRAM_ID,
     associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -244,7 +256,7 @@ await program.methods
     userStakingAccount: userStakingAccountPDA,
     userRewardAccount: userRewardAccount,
     rewardVault: rewardVaultPDA,
-    rewardMint: rewardMint,
+    stakeMint: stakeMint,
     systemProgram: SystemProgram.programId,
     tokenProgram: TOKEN_2022_PROGRAM_ID,
     associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -270,8 +282,8 @@ await program.methods
     userRewardAccount: userRewardAccount,
     stakeVault: stakeVaultPDA,
     rewardVault: rewardVaultPDA,
+    treasuryTokenAccount: treasuryTokenAccount,
     stakeMint: stakeMint,
-    rewardMint: rewardMint,
     systemProgram: SystemProgram.programId,
     tokenProgram: TOKEN_2022_PROGRAM_ID,
     associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -292,8 +304,22 @@ await program.methods
     authority: authority.publicKey,
     rewardVault: rewardVaultPDA,
     treasuryTokenAccount: treasuryTokenAccount,
-    rewardMint: rewardMint,
+    stakeMint: stakeMint,
     tokenProgram: TOKEN_2022_PROGRAM_ID,
+  })
+  .signers([authority])
+  .rpc();
+```
+
+#### 6. Update Normalization K
+Update the normalization coefficient (admin only):
+
+```typescript
+await program.methods
+  .updateNormalizationK(newK) // newK: u128
+  .accounts({
+    authority: authority.publicKey,
+    stakingPool: stakingPoolPDA,
   })
   .signers([authority])
   .rpc();
@@ -316,7 +342,7 @@ const [stakeVaultPDA] = await PublicKey.findProgramAddress(
 
 // Reward Vault PDA
 const [rewardVaultPDA] = await PublicKey.findProgramAddress(
-  [Buffer.from("reward_vault"), rewardMint.toBuffer()],
+  [Buffer.from("reward_vault"), stakeMint.toBuffer()],
   program.programId
 );
 
@@ -390,15 +416,22 @@ const getAllUserStakes = async (userPublicKey: PublicKey) => {
 ## Economic Model
 
 ### Reward Pool
-- Total pool: 250,000,000 tokens (with 6 decimal places)
-- Monthly distribution: 20,833,333 tokens per month
+- Total pool: 250,000,000 tokens (with 9 decimal places)
+- Released over 12 months according to schedule
 - Program duration: 12 months
 
 ### Available rewards calculation by month:
 - Month 0: 20,833,333 tokens
 - Month 1: 41,666,667 tokens
 - Month 2: 62,500,000 tokens
-- ...
+- Month 3: 83,333,333 tokens
+- Month 4: 104,166,667 tokens
+- Month 5: 125,000,000 tokens
+- Month 6: 145,833,333 tokens
+- Month 7: 166,666,667 tokens
+- Month 8: 187,500,000 tokens
+- Month 9: 208,333,333 tokens
+- Month 10: 229,166,667 tokens
 - Month 11+: 250,000,000 tokens (full pool)
 
 ## Security
@@ -422,12 +455,19 @@ const getAllUserStakes = async (userPublicKey: PublicKey) => {
 - `Unauthorized` - unauthorized access
 - `ProgramNotEnded` - program not ended
 - `InvalidStakeIndex` - invalid stake index (must be sequential)
+- `InvalidNormalizationK` - invalid normalization K value
+
+### Daily Rates System
+- The `daily_rates` array stores the base APY for each day of the program
+- Rates are automatically updated when total staked amount changes
+- Historical rates are preserved for accurate retroactive reward calculations
+- Maximum storage: 370 days of rates
 
 ## Requirements
 
 - Rust 1.70+
 - Solana CLI 1.16+
-- Anchor Framework 0.29+
+- Anchor Framework 0.31.1
 - Node.js 16+
 
 ## Testing
